@@ -64,6 +64,7 @@
 
 /* Touchpad settings */
 #define KEY_TOUCHPAD_DISABLE_W_TYPING    "disable-while-typing"
+#define KEY_TOUCHPAD_DISABLE_ON_EXTMOUSE "disable-on-external-mouse"
 #define KEY_TAP_TO_CLICK                 "tap-to-click"
 #define KEY_TWO_FINGER_CLICK             "two-finger-click"
 #define KEY_THREE_FINGER_CLICK           "three-finger-click"
@@ -576,6 +577,42 @@ syndaemon_died (GPid pid, gint status, gpointer user_data)
 }
 
 static int
+set_disable_on_extmouse(CsdMouseManager *manager, gboolean state)
+{
+        if (!touchpad_is_present () || !state)
+          return 1;
+
+        GList *devices, *l;
+        gboolean mouse = FALSE;
+
+        devices = gdk_device_manager_list_devices (manager->priv->device_manager, GDK_DEVICE_TYPE_SLAVE);
+
+        for (l = devices; l != NULL; l = l->next) {
+                Gdkdevice *device = l->data;
+
+                if (gdk_device_get_source (device) == GDK_SOURCE_MOUSE)) {
+                        mouse = TRUE;
+                        break;
+                }
+        }
+
+        for (l = devices; l != NULL; l = l->next) {
+                GdkDevice *device = l->data;
+
+                if (gdk_device_get_source (device) == GDK_SOURCE_TOUCHPAD) {
+                        if (mouse)
+                                set_touchpad_disabled (device)
+                        else
+                                set_touchpad_enabled (device)
+                        /* Disable only the first touchpad */
+                        break;
+                }
+        }
+
+        return 0;
+}
+
+static int
 set_disable_w_typing (CsdMouseManager *manager, gboolean state)
 {
         if (state && touchpad_is_present ()) {
@@ -737,7 +774,7 @@ static void synaptics_set_bool (GdkDevice *device, const char * property_name, i
 
     property = XInternAtom (GDK_DISPLAY_XDISPLAY (gdk_display_get_default ()), property_name, False);
     if (!property) {
-        return;  
+            return;
     }
 
     xdevice = open_gdk_device (device);
@@ -1134,6 +1171,7 @@ device_added_cb (GdkDeviceManager *device_manager,
 
                 /* If a touchpad was to appear... */
                 set_disable_w_typing (manager, g_settings_get_boolean (manager->priv->touchpad_settings, KEY_TOUCHPAD_DISABLE_W_TYPING));
+                set_disable_on_extmouse(manager, g_settings_get_boolean (manager->priv->touchpad_settings, KEY_TOUCHPAD_DISABLE_ON_EXTMOUSE));
         }
 }
 
@@ -1155,6 +1193,7 @@ device_removed_cb (GdkDeviceManager *device_manager,
 
                 /* If a touchpad was to disappear... */
                 set_disable_w_typing (manager, g_settings_get_boolean (manager->priv->touchpad_settings, KEY_TOUCHPAD_DISABLE_W_TYPING));
+                set_disable_on_extmouse(manager, g_settings_get_boolean (manager->priv->touchpad_settings, KEY_TOUCHPAD_DISABLE_ON_EXTMOUSE));
         }
 }
 
